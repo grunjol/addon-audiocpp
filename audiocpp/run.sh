@@ -30,6 +30,8 @@ fi
 BACKEND="$(opt backend)";              BACKEND="${BACKEND:-cpu}"
 THREADS="$(opt threads)";              THREADS="${THREADS:-3}"
 ASR_MODEL="$(opt asr_model)";          ASR_MODEL="${ASR_MODEL:-canary_180m_flash_q8_0}"
+ASR_LANGUAGE="$(opt asr_language)";    ASR_LANGUAGE="${ASR_LANGUAGE:-es}"
+ASR_PUNC="$(opt asr_punc)";            ASR_PUNC="${ASR_PUNC:-false}"
 TTS_MODEL="$(opt tts_model)";          TTS_MODEL="${TTS_MODEL:-pocket_tts_spanish_q8_0}"
 TTS_VOICE="$(opt tts_voice)";          TTS_VOICE="${TTS_VOICE:-}"
 TTS_SPEED="$(opt tts_speed)";          TTS_SPEED="${TTS_SPEED:-1.0}"
@@ -83,12 +85,24 @@ fetch() { # <path in HF repo> <local destination>
     mv "$dest.part" "$dest"
 }
 
-asr_family=""; asr_path=""
+asr_family=""; asr_path=""; asr_opts="{}"
 if [[ -n "$asr_spec" ]]; then
     asr_family="${asr_spec%%|*}"
     asr_path="$MODELS_DIR/${asr_spec#*|}"
     if fetch "${asr_spec#*|}" "$asr_path"; then
         log "speech-to-text ready: $ASR_MODEL ($asr_family)"
+        # Canary with punctuation enabled drops some utterances entirely (empty
+        # transcript); punc=false is reliable, and language pins the output language.
+        case "$asr_family" in
+            canary_asr)
+                asr_opts=$(jq -nc --arg lang "$ASR_LANGUAGE" --arg punc "$ASR_PUNC" \
+                    '{language: $lang, punc: ($punc == "true")}')
+                ;;
+            *)
+                asr_opts=$(jq -nc --arg lang "$ASR_LANGUAGE" '{language: $lang}')
+                ;;
+        esac
+        log "speech-to-text options: $asr_opts"
     else
         log "WARNING: could not download $ASR_MODEL, speech-to-text disabled"
         asr_family=""; asr_path=""
@@ -159,6 +173,7 @@ jq -n \
     --argjson max_loaded "$MAX_LOADED" \
     --arg asr_family "$asr_family" \
     --arg asr_path "$asr_path" \
+    --argjson asr_opts "$asr_opts" \
     --arg tts_family "$tts_family" \
     --arg tts_path "$tts_path" \
     --arg tts_voice "$TTS_VOICE" \
@@ -171,10 +186,10 @@ jq -n \
         lazy_load: true,
         max_loaded_models: $max_loaded,
         models: [
-            (if $asr_path == "" then empty else {
-                id: "asr", family: $asr_family, path: $asr_path,
-                task: "asr", mode: "offline"
-            } end),
+            (if $asr_path == "" then empty else (
+                {id: "asr", family: $asr_family, path: $asr_path, task: "asr", mode: "offline"}
+                + (if $asr_opts == {} then {} else {default_request_options: $asr_opts} end)
+            ) end),
             (if $tts_path == "" then empty else (
                 {id: "tts", family: $tts_family, path: $tts_path, task: "tts", mode: "streaming"}
                 + (if $tts_voice == "" then {} else {default_voice_preset: {voice_id: $tts_voice}} end)

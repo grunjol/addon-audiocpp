@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.4.6
+
+- Speech-to-text reliability: canary returns an **empty transcript** for some perfectly valid audio
+  when punctuation is on (measured: 4/6 files, then 3/6 even with `language=es`). With
+  `punc=false` it transcribes 6/6. New options `asr_language` (default `es`) and `asr_punc`
+  (default `false`) are passed as the model's `default_request_options`.
+- Side effect: without punctuation the transcript has no capitals or periods. Irrelevant for voice
+  commands and for an LLM consumer.
+
 ## 0.9.4.5
 
 - Install `espeak-ng` in the image. Kokoro uses the shared eSpeak frontend for text
