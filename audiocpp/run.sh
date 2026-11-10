@@ -105,6 +105,20 @@ if [[ -n "$tts_spec" ]]; then
     fi
 fi
 
+# ---------------------------------------------------------------- gpu devices
+if [[ -d /dev/dri ]]; then
+    log "GPU devices: $(ls -1 /dev/dri 2>/dev/null | tr '\n' ' ')"
+    if [[ -e /dev/dri/renderD128 ]]; then
+        if head -c 0 /dev/dri/renderD128 2>/dev/null; then
+            log "renderD128 is readable"
+        else
+            log "WARNING: renderD128 exists but cannot be opened"
+        fi
+    fi
+else
+    log "no /dev/dri inside the container"
+fi
+
 # --------------------------------------------------------------- gpu backend
 if [[ "$BACKEND" == "vulkan" ]]; then
     if [[ ! -e /dev/dri/renderD128 ]]; then
@@ -140,11 +154,11 @@ jq -n \
                 id: "asr", family: $asr_family, path: $asr_path,
                 task: "asr", mode: "offline"
             } end),
-            (if $tts_path == "" then empty else {
+            (if $tts_path == "" then empty else ({
                 id: "tts", family: $tts_family, path: $tts_path,
-                task: "tts", mode: "streaming",
-                session_options: (if $tts_voice == "" then {} else {voice_id: $tts_voice} end)
-            } end)
+                task: "tts", mode: "streaming"
+            } + (if $tts_voice == "" then {} else {default_voice_preset: {voice_id: $tts_voice}} end))
+            end)
         ]
     }' > "$SERVER_CONFIG"
 

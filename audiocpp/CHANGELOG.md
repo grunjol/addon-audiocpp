@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.4.2
+
+- Fix the text-to-speech default voice: the model entry now uses the server's
+  `default_voice_preset` instead of session options, so OpenAI-compatible clients can omit
+  `voice` and still get audio (before, a request without `voice` failed with
+  "PocketTTS session prepare() requires a session voice").
+- Log the GPU device nodes found inside the container and whether `renderD128` can be
+  opened, so a Vulkan fallback to CPU is diagnosable from the add-on log.
+
 ## 0.9.4.1
 
 - First release. Thin wrapper around the upstream `ghcr.io/0xshug0/audio.cpp:full-vulkan`
