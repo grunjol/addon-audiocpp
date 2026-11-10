@@ -1,0 +1,42 @@
+configuration:
+  backend:
+    name: Inference backend
+    description: >-
+      `cpu` (always works) or `vulkan` to use the host iGPU through /dev/dri.
+      The add-on verifies the device at start and falls back to CPU when Vulkan
+      is not usable.
+  threads:
+    name: CPU threads
+    description: >-
+      Threads used by the inference backend. Keep 1-2 cores free for Home
+      Assistant and the other add-ons (the host has 4 threads in total).
+  asr_model:
+    name: Speech-to-text model
+    description: >-
+      Model downloaded on first start into /share/audiocpp/models. Canary 180M
+      is the fastest and supports Spanish; Qwen3-ASR 0.6B is more accurate but
+      needs ~1.9 GB of RAM and runs close to real time on this CPU.
+  tts_model:
+    name: Text-to-speech model
+    description: >-
+      PocketTTS (100M, CPU-friendly) in Spanish or English. Downloaded on first
+      start together with the selected voice.
+  tts_voice:
+    name: Voice
+    description: >-
+      Voice preset of the text-to-speech package (for example `rafael`, `alba`,
+      `estelle` in Spanish). Leave empty to use the model default.
+  max_loaded_models:
+    name: Models kept in memory
+    description: >-
+      How many models may stay resident at once. Each one holds its own RAM;
+      two is a sane default for this host.
+  hf_token:
+    name: Hugging Face token
+    description: >-
+      Only needed for gated or private model repositories. Stored as a password
+      option and passed to the downloads as a bearer token.
+network:
+  8099/tcp: >-
+    audio.cpp HTTP API (OpenAI-compatible) and WebUI. Not required when using
+    the ingress panel.
