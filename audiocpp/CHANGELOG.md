@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.4.8
+
+- New option `tts_language` (default `es`). Chatterbox hardcodes `language = "en"` in its session
+  defaults, so Spanish text was read with English phonetics ("rabioles joy" instead of "ravioles
+  hoy"). The language is now passed as `default_request_options.language` for `chatterbox` (and
+  kokoro, which had `es` hardcoded, now follows the option too).
+
 ## 0.9.4.7
 
 - New TTS family: **Chatterbox** (`chatterbox_q8_0`, 0.5B, 19 languages, zero-shot cloning,

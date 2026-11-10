@@ -35,6 +35,7 @@ ASR_PUNC="$(opt asr_punc)";            ASR_PUNC="${ASR_PUNC:-false}"
 TTS_MODEL="$(opt tts_model)";          TTS_MODEL="${TTS_MODEL:-pocket_tts_spanish_q8_0}"
 TTS_VOICE="$(opt tts_voice)";          TTS_VOICE="${TTS_VOICE:-}"
 TTS_VOICE_REF="$(opt tts_voice_ref)";  TTS_VOICE_REF="${TTS_VOICE_REF:-}"
+TTS_LANGUAGE="$(opt tts_language)";    TTS_LANGUAGE="${TTS_LANGUAGE:-es}"
 TTS_SPEED="$(opt tts_speed)";          TTS_SPEED="${TTS_SPEED:-1.0}"
 MAX_LOADED="$(opt max_loaded_models)"; MAX_LOADED="${MAX_LOADED:-2}"
 HF_TOKEN="$(opt hf_token)"
@@ -199,6 +200,7 @@ jq -n \
     --arg tts_voice "$TTS_VOICE" \
     --arg tts_voice_ref "$TTS_VOICE_REF" \
     --arg tts_mode "$tts_mode" \
+    --arg tts_language "$TTS_LANGUAGE" \
     --argjson tts_speed "$TTS_SPEED" \
     '{
         host: "0.0.0.0",
@@ -217,9 +219,11 @@ jq -n \
                 + (if $tts_voice_ref != "" then {default_voice_preset: {voice_ref: $tts_voice_ref}}
                    elif $tts_voice == "" then {}
                    else {default_voice_preset: {voice_id: $tts_voice}} end)
-                + (if $tts_family == "kokoro_tts"
+                + (if $tts_family == "chatterbox"
+                   then {default_request_options: {language: $tts_language}}
+                   elif $tts_family == "kokoro_tts"
                    then {default_request_options: (
-                       {language: "es"} + (if $tts_speed == 1 then {} else {speed: $tts_speed} end)
+                       {language: $tts_language} + (if $tts_speed == 1 then {} else {speed: $tts_speed} end)
                    )}
                    else (if $tts_speed == 1 then {} else {default_request_options: {speed: $tts_speed}} end)
                    end)

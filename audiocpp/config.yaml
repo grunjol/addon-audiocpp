@@ -1,5 +1,5 @@
 name: "audio.cpp"
-version: "0.9.4.7"
+version: "0.9.4.8"
 slug: "audiocpp"
 description: "Local audio inference server: text-to-speech, speech-to-text, VAD and more (CPU or Vulkan)"
 url: "https://github.com/0xShug0/audio.cpp"
@@ -36,6 +36,7 @@ options:
   tts_model: "pocket_tts_spanish_q8_0"
   tts_voice: "rafael"
   tts_voice_ref: ""
+  tts_language: "es"
   tts_speed: 1.0
   max_loaded_models: 2
   hf_token: ""
@@ -48,6 +49,7 @@ schema:
   tts_model: "list(pocket_tts_spanish_q8_0|pocket_tts_english_q8_0|kokoro_82m_q8_0|chatterbox_q8_0|none)"
   tts_voice: "str"
   tts_voice_ref: "str"
+  tts_language: "list(es|en|pt|fr|de|it|nl|pl|sv|da|no|fi|tr|el|hi|ko|ms|sw|ar)"
   tts_speed: "float(0.5,2.0)"
   max_loaded_models: "int(1,4)"
   hf_token: "password"
