@@ -1,5 +1,5 @@
 name: "audio.cpp"
-version: "0.9.4.2"
+version: "0.9.4.3"
 slug: "audiocpp"
 description: "Local audio inference server: text-to-speech, speech-to-text, VAD and more (CPU or Vulkan)"
 url: "https://github.com/0xShug0/audio.cpp"
@@ -14,8 +14,12 @@ panel_icon: "mdi:waveform"
 panel_title: "audio.cpp"
 panel_admin: false
 devices:
-  # iGPU for the Vulkan backend. Without it the add-on still runs on CPU.
-  - /dev/dri
+  # iGPU for the Vulkan backend. Individual device nodes: the Supervisor maps
+  # these with --device; a directory path such as /dev/dri is not enough and the
+  # nodes end up bind-mounted but unusable (EPERM). Without them the add-on
+  # still runs on CPU.
+  - /dev/dri/card0
+  - /dev/dri/renderD128
 ports:
   8099/tcp: null
 ports_description:

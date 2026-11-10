@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.4.3
+
+- Declare the iGPU as individual device nodes (`/dev/dri/card0`,
+  `/dev/dri/renderD128`) instead of the `/dev/dri` directory: with the directory the
+  Supervisor bind-mounts the nodes but does not grant access, so opening `renderD128`
+  returned EPERM and Vulkan could not start.
+
 ## 0.9.4.2
 
 - Fix the text-to-speech default voice: the model entry now uses the server's
