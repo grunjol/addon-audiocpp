@@ -37,6 +37,7 @@ TTS_HQ_MODEL="$(opt tts_hq_model)";    TTS_HQ_MODEL="${TTS_HQ_MODEL:-none}"
 TTS_VOICE="$(opt tts_voice)";          TTS_VOICE="${TTS_VOICE:-}"
 TTS_VOICE_REF="$(opt tts_voice_ref)";  TTS_VOICE_REF="${TTS_VOICE_REF:-}"
 TTS_VOICE_REF_TEXT="$(opt tts_voice_ref_text)"; TTS_VOICE_REF_TEXT="${TTS_VOICE_REF_TEXT:-}"
+TTS_VOICE_PRESETS="$(opt tts_voice_presets)"
 TTS_LANGUAGE="$(opt tts_language)";    TTS_LANGUAGE="${TTS_LANGUAGE:-es}"
 TTS_SPEED="$(opt tts_speed)";          TTS_SPEED="${TTS_SPEED:-1.0}"
 MAX_LOADED="$(opt max_loaded_models)"; MAX_LOADED="${MAX_LOADED:-2}"
@@ -78,6 +79,29 @@ fetch() { # <path in HF repo> <local destination>
     fi
     mv "$dest.part" "$dest"
 }
+
+# Named voice presets -> {name: {voice_ref: path}}. The HA integration lists these
+# from GET /v1/audio/voices, so every entry here becomes selectable in the UI.
+voice_presets_json="{}"
+if [[ -n "$TTS_VOICE_PRESETS" ]]; then
+    while IFS= read -r line; do
+        [[ -z "${line// }" || "$line" == \#* ]] && continue
+        name="${line%%=*}"
+        ref="${line#*=}"
+        name="${name// /}"
+        ref="${ref# }"
+        ref="${ref% }"
+        if [[ -z "$name" || -z "$ref" ]]; then
+            continue
+        fi
+        if [[ -s "$ref" ]]; then
+            voice_presets_json=$(jq -nc --argjson cur "$voice_presets_json" --arg n "$name" --arg p "$ref" \
+                '$cur + {($n): {voice_ref: $p}}')
+        else
+            log "WARNING: voice preset '$name' points to a missing file: $ref"
+        fi
+    done <<< "$TTS_VOICE_PRESETS"
+fi
 
 # Emits one JSON model entry per call; log lines go to stderr.
 asr_entry() {
@@ -204,9 +228,10 @@ tts_entry() {
     esac
 
     jq -nc --arg sid "$sid" --arg family "$family" --arg path "$path" --arg mode "$mode" \
-        --argjson preset "$preset" --argjson opts "$opts" \
+        --argjson preset "$preset" --argjson opts "$opts" --argjson presets "$voice_presets_json" \
         '{id: $sid, family: $family, path: $path, task: "tts", mode: $mode}
          + (if ($preset|length) == 0 then {} else {default_voice_preset: $preset} end)
+         + (if ($presets|length) == 0 then {} else {voice_presets: $presets} end)
          + (if ($opts|length) == 0 then {} else {default_request_options: $opts} end)'
 }
 

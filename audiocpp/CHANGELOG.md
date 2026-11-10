@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.4.14
+
+- New option `tts_voice_presets`: one `name=/absolute/path.wav` per line. Each entry becomes a named
+  server preset (`voice_presets` in the model config) and is advertised by `GET /v1/audio/voices`,
+  which is what the Home Assistant integration reads to populate its voice selector. Cloned voices
+  therefore show up in the UI next to the built-in ones.
+
 ## 0.9.4.13
 
 - `tts_voice_ref` now also applies to `pocket_tts`: a reference clip takes precedence over the

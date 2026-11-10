@@ -1,5 +1,5 @@
 name: "audio.cpp"
-version: "0.9.4.13"
+version: "0.9.4.14"
 slug: "audiocpp"
 description: "Local audio inference server: text-to-speech, speech-to-text, VAD and more (CPU or Vulkan)"
 url: "https://github.com/0xShug0/audio.cpp"
@@ -38,6 +38,7 @@ options:
   tts_voice: "rafael"
   tts_voice_ref: ""
   tts_voice_ref_text: ""
+  tts_voice_presets: ""
   tts_language: "es"
   tts_speed: 1.0
   max_loaded_models: 2
@@ -53,6 +54,7 @@ schema:
   tts_voice: "str"
   tts_voice_ref: "str"
   tts_voice_ref_text: "str"
+  tts_voice_presets: "str"
   tts_language: "list(es|en|pt|fr|de|it|nl|pl|sv|da|no|fi|tr|el|hi|ko|ms|sw|ar)"
   tts_speed: "float(0.5,2.0)"
   max_loaded_models: "int(1,4)"
