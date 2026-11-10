@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.4.4
+
+- New text-to-speech option `kokoro_82m_q8_0` (Kokoro 82M, 54 built-in voices; the Spanish ones
+  are `ef_dora`, `em_alex`, `em_santa`). Kokoro does not clone voices; `pocket_tts` stays the
+  cloning family.
+- New `tts_speed` option (0.5-2.0). It is passed as `default_request_options.speed`, which Kokoro
+  supports; `pocket_tts` rejects it, so leave it at 1.0 with that family.
+- Kokoro models get `default_request_options.language=es` so the shared eSpeak frontend voices
+  Spanish correctly.
+- A leftover voice from another family (for example `rafael` with kokoro selected) is replaced by
+  the family default instead of failing the request.
+
 ## 0.9.4.3
 
 - Declare the iGPU as individual device nodes (`/dev/dri/card0`,

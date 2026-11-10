@@ -31,7 +31,8 @@ BACKEND="$(opt backend)";              BACKEND="${BACKEND:-cpu}"
 THREADS="$(opt threads)";              THREADS="${THREADS:-3}"
 ASR_MODEL="$(opt asr_model)";          ASR_MODEL="${ASR_MODEL:-canary_180m_flash_q8_0}"
 TTS_MODEL="$(opt tts_model)";          TTS_MODEL="${TTS_MODEL:-pocket_tts_spanish_q8_0}"
-TTS_VOICE="$(opt tts_voice)";          TTS_VOICE="${TTS_VOICE:-rafael}"
+TTS_VOICE="$(opt tts_voice)";          TTS_VOICE="${TTS_VOICE:-}"
+TTS_SPEED="$(opt tts_speed)";          TTS_SPEED="${TTS_SPEED:-1.0}"
 MAX_LOADED="$(opt max_loaded_models)"; MAX_LOADED="${MAX_LOADED:-2}"
 HF_TOKEN="$(opt hf_token)"
 
@@ -53,9 +54,19 @@ tts_spec=""; tts_lang=""
 case "$TTS_MODEL" in
     pocket_tts_spanish_q8_0) tts_spec="pocket_tts|PocketTTS-GGUF/spanish/pocket-tts-spanish-q8_0.gguf"; tts_lang="spanish" ;;
     pocket_tts_english_q8_0) tts_spec="pocket_tts|PocketTTS-GGUF/english/pocket-tts-english-q8_0.gguf"; tts_lang="english" ;;
+    kokoro_82m_q8_0)          tts_spec="kokoro_tts|Kokoro-82M-GGUF/kokoro-82m-q8_0.gguf"; tts_lang="" ;;
     none)                    tts_spec="" ;;
     *) log "WARNING: unknown tts_model '$TTS_MODEL', text-to-speech disabled"; tts_spec="" ;;
 esac
+
+# Families ship their own default voice; keep an explicit one if the user set it.
+if [[ -z "$TTS_VOICE" ]]; then
+    case "$TTS_MODEL" in
+        kokoro_82m_q8_0)          TTS_VOICE="ef_dora" ;;
+        pocket_tts_spanish_q8_0)  TTS_VOICE="rafael" ;;
+        pocket_tts_english_q8_0)  TTS_VOICE="alba" ;;
+    esac
+fi
 
 fetch() { # <path in HF repo> <local destination>
     local rel="$1" dest="$2"
@@ -88,9 +99,18 @@ tts_family=""; tts_path=""
 if [[ -n "$tts_spec" ]]; then
     tts_family="${tts_spec%%|*}"
     tts_path="$MODELS_DIR/$(dirname "${tts_spec#*|}")"
+    # kokoro loads the single GGUF file; pocket_tts loads the package directory
+    [[ "$tts_family" == "kokoro_tts" ]] && tts_path="$MODELS_DIR/${tts_spec#*|}"
     if fetch "${tts_spec#*|}" "$MODELS_DIR/${tts_spec#*|}"; then
         log "text-to-speech ready: $TTS_MODEL ($tts_family)"
-        if [[ -n "$TTS_VOICE" ]]; then
+        # A voice left over from another family must not be passed through.
+        if [[ "$tts_family" == "kokoro_tts" && ! "$TTS_VOICE" =~ ^(ef|em)_ ]]; then
+            log "voice '$TTS_VOICE' is not a kokoro voice, using ef_dora"
+            TTS_VOICE="ef_dora"
+        fi
+        # Only pocket_tts needs a voice embedding file: kokoro ships its voice packs
+        # inside the GGUF and selects them by voice id.
+        if [[ "$tts_family" == "pocket_tts" && -n "$TTS_VOICE" ]]; then
             if fetch "PocketTTS-GGUF/$tts_lang/embeddings/$TTS_VOICE.safetensors" \
                      "$tts_path/embeddings/$TTS_VOICE.safetensors"; then
                 log "voice ready: $TTS_VOICE"
@@ -142,6 +162,7 @@ jq -n \
     --arg tts_family "$tts_family" \
     --arg tts_path "$tts_path" \
     --arg tts_voice "$TTS_VOICE" \
+    --argjson tts_speed "$TTS_SPEED" \
     '{
         host: "0.0.0.0",
         port: 8099,
@@ -154,11 +175,16 @@ jq -n \
                 id: "asr", family: $asr_family, path: $asr_path,
                 task: "asr", mode: "offline"
             } end),
-            (if $tts_path == "" then empty else ({
-                id: "tts", family: $tts_family, path: $tts_path,
-                task: "tts", mode: "streaming"
-            } + (if $tts_voice == "" then {} else {default_voice_preset: {voice_id: $tts_voice}} end))
-            end)
+            (if $tts_path == "" then empty else (
+                {id: "tts", family: $tts_family, path: $tts_path, task: "tts", mode: "streaming"}
+                + (if $tts_voice == "" then {} else {default_voice_preset: {voice_id: $tts_voice}} end)
+                + (if $tts_family == "kokoro_tts"
+                   then {default_request_options: (
+                       {language: "es"} + (if $tts_speed == 1 then {} else {speed: $tts_speed} end)
+                   )}
+                   else (if $tts_speed == 1 then {} else {default_request_options: {speed: $tts_speed}} end)
+                   end)
+            ) end)
         ]
     }' > "$SERVER_CONFIG"
 
