@@ -13,6 +13,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
+        espeak-ng \
         jq \
         libvulkan1 \
         mesa-vulkan-drivers \

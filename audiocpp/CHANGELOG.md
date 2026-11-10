@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.4.5
+
+- Install `espeak-ng` in the image. Kokoro uses the shared eSpeak frontend for text
+  normalization/phonemization of several languages (Spanish included); without the library every
+  kokoro request failed with `Could not load eSpeak-ng; install the shared library or provide its
+  path`.
+
 ## 0.9.4.4
 
 - New text-to-speech option `kokoro_82m_q8_0` (Kokoro 82M, 54 built-in voices; the Spanish ones
