@@ -60,6 +60,7 @@ case "$TTS_MODEL" in
     pocket_tts_english_q8_0) tts_spec="pocket_tts|PocketTTS-GGUF/english/pocket-tts-english-q8_0.gguf"; tts_lang="english" ;;
     kokoro_82m_q8_0)          tts_spec="kokoro_tts|Kokoro-82M-GGUF/kokoro-82m-q8_0.gguf"; tts_lang="" ;;
     chatterbox_q8_0)          tts_spec="chatterbox|Chatterbox-GGUF/chatterbox-q8_0.gguf"; tts_lang="" ;;
+    qwen3_tts_0_6b_q8_0)      tts_spec="qwen3_tts|Qwen3-TTS-12Hz-0.6B-Base-GGUF/qwen3-tts-12hz-0.6b-base-q8_0.gguf"; tts_lang="" ;;
     none)                    tts_spec="" ;;
     *) log "WARNING: unknown tts_model '$TTS_MODEL', text-to-speech disabled"; tts_spec="" ;;
 esac
@@ -124,7 +125,7 @@ if [[ -n "$tts_spec" ]]; then
     tts_path="$MODELS_DIR/$(dirname "${tts_spec#*|}")"
     # kokoro and chatterbox load a single GGUF file; pocket_tts loads the package directory
     case "$tts_family" in
-        kokoro_tts|chatterbox) tts_path="$MODELS_DIR/${tts_spec#*|}" ;;
+        kokoro_tts|chatterbox|qwen3_tts) tts_path="$MODELS_DIR/${tts_spec#*|}" ;;
     esac
     if fetch "${tts_spec#*|}" "$MODELS_DIR/${tts_spec#*|}"; then
         log "text-to-speech ready: $TTS_MODEL ($tts_family)"
@@ -144,12 +145,12 @@ if [[ -n "$tts_spec" ]]; then
                 TTS_VOICE=""
             fi
         fi
-        # chatterbox has no preset voices: it clones from a reference clip.
-        if [[ "$tts_family" == "chatterbox" ]]; then
+        # chatterbox and qwen3_tts have no preset voices: they clone from a reference clip.
+        if [[ "$tts_family" == "chatterbox" || "$tts_family" == "qwen3_tts" ]]; then
             if [[ -n "$TTS_VOICE_REF" && -s "$TTS_VOICE_REF" ]]; then
                 log "voice reference: $TTS_VOICE_REF"
             else
-                log "WARNING: chatterbox clones from tts_voice_ref (a wav inside /share); none found, using the family default"
+                log "WARNING: $tts_family clones from tts_voice_ref (a wav inside /share); none found, using the family default"
                 TTS_VOICE_REF=""
             fi
             TTS_VOICE=""
@@ -219,7 +220,7 @@ jq -n \
                 + (if $tts_voice_ref != "" then {default_voice_preset: {voice_ref: $tts_voice_ref}}
                    elif $tts_voice == "" then {}
                    else {default_voice_preset: {voice_id: $tts_voice}} end)
-                + (if $tts_family == "chatterbox"
+                + (if ($tts_family == "chatterbox" or $tts_family == "qwen3_tts")
                    then {default_request_options: {language: $tts_language}}
                    elif $tts_family == "kokoro_tts"
                    then {default_request_options: (

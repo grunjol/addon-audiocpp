@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.4.9
+
+- New TTS family: **Qwen3-TTS 0.6B Base** (`qwen3_tts_0_6b_q8_0`, 1.99 GB, 10 languages,
+  zero-shot cloning + voice design, streaming and offline). It is the multilingual family that
+  actually honours `language`: its spec exposes `language` as a request option.
+- **Chatterbox cannot speak Spanish through the API.** Its struct carries `language = "en"` but
+  `model_specs/chatterbox.json` does not list `language` among the request options, so the value is
+  dropped and Spanish text is rendered with English phonetics. The family stays in the schema for
+  English, marked in `tts_model`'s description.
+
 ## 0.9.4.8
 
 - New option `tts_language` (default `es`). Chatterbox hardcodes `language = "en"` in its session
