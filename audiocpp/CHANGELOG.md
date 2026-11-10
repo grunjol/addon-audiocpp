@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.4.13
+
+- `tts_voice_ref` now also applies to `pocket_tts`: a reference clip takes precedence over the
+  `tts_voice` embedding, so a cloned voice can be the model default instead of a preset.
+  Log line: `voice reference: <path>`.
+
 ## 0.9.4.12
 
 - Fix: `pocket_tts` refuses to load a directory holding more than one GGUF

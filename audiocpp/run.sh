@@ -149,15 +149,22 @@ tts_entry() {
             mode="offline"
             ;;
         pocket_tts)
-            if [[ -z "$voice" ]]; then
-                if [[ "$lang" == "spanish" ]]; then voice="rafael"; else voice="alba"; fi
-            fi
-            if fetch "PocketTTS-GGUF/$lang/embeddings/$voice.safetensors" \
-                     "$path/embeddings/$voice.safetensors"; then
-                log "voice ready: $voice"
-                preset=$(jq -nc --arg v "$voice" '{voice_id: $v}')
+            # A reference clip wins over a preset embedding: it is the only way to
+            # use a cloned voice as the model default.
+            if [[ -n "$TTS_VOICE_REF" && -s "$TTS_VOICE_REF" ]]; then
+                log "voice reference: $TTS_VOICE_REF"
+                preset=$(jq -nc --arg r "$TTS_VOICE_REF" '{voice_ref: $r}')
             else
-                log "WARNING: voice '$voice' not available for $lang, using the model default"
+                if [[ -z "$voice" ]]; then
+                    if [[ "$lang" == "spanish" ]]; then voice="rafael"; else voice="alba"; fi
+                fi
+                if fetch "PocketTTS-GGUF/$lang/embeddings/$voice.safetensors" \
+                         "$path/embeddings/$voice.safetensors"; then
+                    log "voice ready: $voice"
+                    preset=$(jq -nc --arg v "$voice" '{voice_id: $v}')
+                else
+                    log "WARNING: voice '$voice' not available for $lang, using the model default"
+                fi
             fi
             opts=$(jq -nc --argjson sp "$TTS_SPEED" 'if $sp == 1 then {} else {speed: $sp} end')
             ;;
