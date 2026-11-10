@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.4.10
+
+- New option `tts_hq_model` (default `none`): registers a **second TTS model** as `tts-hq` in the
+  same server, so the fast family stays on `tts` (Assist, streaming) and the high-quality one is
+  callable per request by model id. Pair it with `max_loaded_models: 2`.
+- New option `tts_voice_ref_text`: transcript of `tts_voice_ref`. `qwen3_tts` clones in ICL mode and
+  answers `Qwen3 voice clone ICL mode requires reference text` (HTTP 500) without it.
+- `run.sh` reworked: one `model_spec` table plus `asr_entry`/`tts_entry` helpers build the `models`
+  array, and all `log` output goes to stderr so it cannot corrupt the generated JSON.
+
 ## 0.9.4.9
 
 - New TTS family: **Qwen3-TTS 0.6B Base** (`qwen3_tts_0_6b_q8_0`, 1.99 GB, 10 languages,

@@ -15,7 +15,7 @@ readonly PORT="8099"
 readonly APP_DIR="/app"
 cd "$APP_DIR"
 
-log() { printf '[audiocpp] %s\n' "$*"; }
+log() { printf '[audiocpp] %s\n' "$*" >&2; }
 
 opt() {
     # Empty option -> empty string (never the literal "null").
@@ -33,8 +33,10 @@ ASR_MODEL="$(opt asr_model)";          ASR_MODEL="${ASR_MODEL:-canary_180m_flash
 ASR_LANGUAGE="$(opt asr_language)";    ASR_LANGUAGE="${ASR_LANGUAGE:-es}"
 ASR_PUNC="$(opt asr_punc)";            ASR_PUNC="${ASR_PUNC:-false}"
 TTS_MODEL="$(opt tts_model)";          TTS_MODEL="${TTS_MODEL:-pocket_tts_spanish_q8_0}"
+TTS_HQ_MODEL="$(opt tts_hq_model)";    TTS_HQ_MODEL="${TTS_HQ_MODEL:-none}"
 TTS_VOICE="$(opt tts_voice)";          TTS_VOICE="${TTS_VOICE:-}"
 TTS_VOICE_REF="$(opt tts_voice_ref)";  TTS_VOICE_REF="${TTS_VOICE_REF:-}"
+TTS_VOICE_REF_TEXT="$(opt tts_voice_ref_text)"; TTS_VOICE_REF_TEXT="${TTS_VOICE_REF_TEXT:-}"
 TTS_LANGUAGE="$(opt tts_language)";    TTS_LANGUAGE="${TTS_LANGUAGE:-es}"
 TTS_SPEED="$(opt tts_speed)";          TTS_SPEED="${TTS_SPEED:-1.0}"
 MAX_LOADED="$(opt max_loaded_models)"; MAX_LOADED="${MAX_LOADED:-2}"
@@ -44,41 +46,21 @@ export HF_TOKEN
 mkdir -p "$MODELS_DIR" /data
 
 # ---------------------------------------------------------------- model table
-# Package id -> "family|path inside the audio.cpp-gguf repo".
-asr_spec=""
-case "$ASR_MODEL" in
-    canary_180m_flash_q8_0) asr_spec="canary_asr|Canary-180M-Flash-GGUF/canary-180m-flash-q8_0.gguf" ;;
-    qwen3_asr_0_6b_q8_0)    asr_spec="qwen3_asr|Qwen3-ASR-0.6B-GGUF/qwen3-asr-0.6b-q8_0.gguf" ;;
-    nemotron_asr_q8_0)      asr_spec="nemotron_asr|Nemotron-3.5-ASR-Streaming-0.6B-GGUF/nemotron-3.5-asr-streaming-0.6b-q8_0.gguf" ;;
-    none)                   asr_spec="" ;;
-    *) log "WARNING: unknown asr_model '$ASR_MODEL', speech-to-text disabled"; asr_spec="" ;;
-esac
-
-tts_spec=""; tts_lang=""
-case "$TTS_MODEL" in
-    pocket_tts_spanish_q8_0) tts_spec="pocket_tts|PocketTTS-GGUF/spanish/pocket-tts-spanish-q8_0.gguf"; tts_lang="spanish" ;;
-    pocket_tts_english_q8_0) tts_spec="pocket_tts|PocketTTS-GGUF/english/pocket-tts-english-q8_0.gguf"; tts_lang="english" ;;
-    kokoro_82m_q8_0)          tts_spec="kokoro_tts|Kokoro-82M-GGUF/kokoro-82m-q8_0.gguf"; tts_lang="" ;;
-    chatterbox_q8_0)          tts_spec="chatterbox|Chatterbox-GGUF/chatterbox-q8_0.gguf"; tts_lang="" ;;
-    qwen3_tts_0_6b_q8_0)      tts_spec="qwen3_tts|Qwen3-TTS-12Hz-0.6B-Base-GGUF/qwen3-tts-12hz-0.6b-base-q8_0.gguf"; tts_lang="" ;;
-    none)                    tts_spec="" ;;
-    *) log "WARNING: unknown tts_model '$TTS_MODEL', text-to-speech disabled"; tts_spec="" ;;
-esac
-
-# Streaming is only advertised by some families; chatterbox is offline-only.
-tts_mode="streaming"
-case "${tts_spec%%|*}" in
-    chatterbox) tts_mode="offline" ;;
-esac
-
-# Families ship their own default voice; keep an explicit one if the user set it.
-if [[ -z "$TTS_VOICE" ]]; then
-    case "$TTS_MODEL" in
-        kokoro_82m_q8_0)          TTS_VOICE="ef_dora" ;;
-        pocket_tts_spanish_q8_0)  TTS_VOICE="rafael" ;;
-        pocket_tts_english_q8_0)  TTS_VOICE="alba" ;;
+# Package id -> "family|path inside the audio.cpp-gguf repo|package language"
+model_spec() {
+    case "$1" in
+        canary_180m_flash_q8_0)  echo "canary_asr|Canary-180M-Flash-GGUF/canary-180m-flash-q8_0.gguf|" ;;
+        qwen3_asr_0_6b_q8_0)     echo "qwen3_asr|Qwen3-ASR-0.6B-GGUF/qwen3-asr-0.6b-q8_0.gguf|" ;;
+        nemotron_asr_q8_0)       echo "nemotron_asr|Nemotron-3.5-ASR-Streaming-0.6B-GGUF/nemotron-3.5-asr-streaming-0.6b-q8_0.gguf|" ;;
+        pocket_tts_spanish_q8_0) echo "pocket_tts|PocketTTS-GGUF/spanish/pocket-tts-spanish-q8_0.gguf|spanish" ;;
+        pocket_tts_english_q8_0) echo "pocket_tts|PocketTTS-GGUF/english/pocket-tts-english-q8_0.gguf|english" ;;
+        kokoro_82m_q8_0)         echo "kokoro_tts|Kokoro-82M-GGUF/kokoro-82m-q8_0.gguf|" ;;
+        chatterbox_q8_0)         echo "chatterbox|Chatterbox-GGUF/chatterbox-q8_0.gguf|" ;;
+        qwen3_tts_0_6b_q8_0)     echo "qwen3_tts|Qwen3-TTS-12Hz-0.6B-Base-GGUF/qwen3-tts-12hz-0.6b-base-q8_0.gguf|" ;;
+        none)                    echo "none||" ;;
+        *) return 1 ;;
     esac
-fi
+}
 
 fetch() { # <path in HF repo> <local destination>
     local rel="$1" dest="$2"
@@ -86,7 +68,7 @@ fetch() { # <path in HF repo> <local destination>
     mkdir -p "$(dirname "$dest")"
     log "downloading $rel"
     if [[ -n "$HF_TOKEN" ]]; then
-        curl -fSL --retry 3 --connect-timeout 20 -H "Authorization: Bearer $HF_TOKEN" \
+        curl -fSL --retry 3 --connect-timeout 20 -H "Authorization: Bearer ***" \
             -o "$dest.part" "$HF_BASE/$HF_REPO/resolve/main/$rel"
     else
         curl -fSL --retry 3 --connect-timeout 20 \
@@ -95,71 +77,120 @@ fetch() { # <path in HF repo> <local destination>
     mv "$dest.part" "$dest"
 }
 
-asr_family=""; asr_path=""; asr_opts="{}"
-if [[ -n "$asr_spec" ]]; then
-    asr_family="${asr_spec%%|*}"
-    asr_path="$MODELS_DIR/${asr_spec#*|}"
-    if fetch "${asr_spec#*|}" "$asr_path"; then
-        log "speech-to-text ready: $ASR_MODEL ($asr_family)"
-        # Canary with punctuation enabled drops some utterances entirely (empty
-        # transcript); punc=false is reliable, and language pins the output language.
-        case "$asr_family" in
-            canary_asr)
-                asr_opts=$(jq -nc --arg lang "$ASR_LANGUAGE" --arg punc "$ASR_PUNC" \
-                    '{language: $lang, punc: ($punc == "true")}')
-                ;;
-            *)
-                asr_opts=$(jq -nc --arg lang "$ASR_LANGUAGE" '{language: $lang}')
-                ;;
-        esac
-        log "speech-to-text options: $asr_opts"
-    else
-        log "WARNING: could not download $ASR_MODEL, speech-to-text disabled"
-        asr_family=""; asr_path=""
+# Emits one JSON model entry per call; log lines go to stderr.
+asr_entry() {
+    local spec family rel path opts
+    if ! spec="$(model_spec "$ASR_MODEL")"; then
+        log "WARNING: unknown asr_model '$ASR_MODEL', speech-to-text disabled"
+        return 0
     fi
-fi
+    IFS='|' read -r family rel _ <<<"$spec"
+    [[ -z "$family" || "$family" == "none" ]] && return 0
+    path="$MODELS_DIR/$rel"
+    if ! fetch "$rel" "$path"; then
+        log "WARNING: could not download $ASR_MODEL, speech-to-text disabled"
+        return 0
+    fi
+    log "speech-to-text ready: $ASR_MODEL ($family)"
+    # Canary with punctuation enabled drops some utterances entirely (empty
+    # transcript); punc=false is reliable, and language pins the output language.
+    if [[ "$family" == "canary_asr" ]]; then
+        opts=$(jq -nc --arg lang "$ASR_LANGUAGE" --arg punc "$ASR_PUNC" \
+            '{language: $lang, punc: ($punc == "true")}')
+    else
+        opts=$(jq -nc --arg lang "$ASR_LANGUAGE" '{language: $lang}')
+    fi
+    log "speech-to-text options: $opts"
+    jq -nc --arg family "$family" --arg path "$path" --argjson opts "$opts" \
+        '{id: "asr", family: $family, path: $path, task: "asr", mode: "offline"}
+         + (if ($opts|length) == 0 then {} else {default_request_options: $opts} end)'
+}
 
-tts_family=""; tts_path=""
-if [[ -n "$tts_spec" ]]; then
-    tts_family="${tts_spec%%|*}"
-    tts_path="$MODELS_DIR/$(dirname "${tts_spec#*|}")"
-    # kokoro and chatterbox load a single GGUF file; pocket_tts loads the package directory
-    case "$tts_family" in
-        kokoro_tts|chatterbox|qwen3_tts) tts_path="$MODELS_DIR/${tts_spec#*|}" ;;
+# tts_entry <model id> <server model id>
+tts_entry() {
+    local model="$1" sid="$2" spec family rel lang path mode="streaming"
+    local preset="{}" opts="{}" voice="$TTS_VOICE"
+    if ! spec="$(model_spec "$model")"; then
+        log "WARNING: unknown tts model '$model' ($sid), skipped"
+        return 0
+    fi
+    IFS='|' read -r family rel lang <<<"$spec"
+    [[ -z "$family" || "$family" == "none" ]] && return 0
+
+    path="$MODELS_DIR/$(dirname "$rel")"
+    # These families load the single GGUF file; pocket_tts loads the package dir.
+    case "$family" in
+        kokoro_tts|chatterbox|qwen3_tts) path="$MODELS_DIR/$rel" ;;
     esac
-    if fetch "${tts_spec#*|}" "$MODELS_DIR/${tts_spec#*|}"; then
-        log "text-to-speech ready: $TTS_MODEL ($tts_family)"
-        # A voice left over from another family must not be passed through.
-        if [[ "$tts_family" == "kokoro_tts" && ! "$TTS_VOICE" =~ ^(ef|em)_ ]]; then
-            log "voice '$TTS_VOICE' is not a kokoro voice, using ef_dora"
-            TTS_VOICE="ef_dora"
-        fi
-        # Only pocket_tts needs a voice embedding file: kokoro ships its voice packs
-        # inside the GGUF and selects them by voice id.
-        if [[ "$tts_family" == "pocket_tts" && -n "$TTS_VOICE" ]]; then
-            if fetch "PocketTTS-GGUF/$tts_lang/embeddings/$TTS_VOICE.safetensors" \
-                     "$tts_path/embeddings/$TTS_VOICE.safetensors"; then
-                log "voice ready: $TTS_VOICE"
-            else
-                log "WARNING: voice '$TTS_VOICE' not available for $tts_lang, using the model default"
-                TTS_VOICE=""
+    if ! fetch "$rel" "$MODELS_DIR/$rel"; then
+        log "WARNING: could not download $model ($sid), skipped"
+        return 0
+    fi
+    log "text-to-speech ready: $model ($family, id=$sid)"
+
+    case "$family" in
+        kokoro_tts)
+            if [[ ! "$voice" =~ ^(ef|em)_ ]]; then
+                [[ -n "$voice" ]] && log "voice '$voice' is not a kokoro voice, using ef_dora"
+                voice="ef_dora"
             fi
-        fi
-        # chatterbox and qwen3_tts have no preset voices: they clone from a reference clip.
-        if [[ "$tts_family" == "chatterbox" || "$tts_family" == "qwen3_tts" ]]; then
+            preset=$(jq -nc --arg v "$voice" '{voice_id: $v}')
+            opts=$(jq -nc --arg lang "$TTS_LANGUAGE" --argjson sp "$TTS_SPEED" \
+                '{language: $lang} + (if $sp == 1 then {} else {speed: $sp} end)')
+            mode="offline"
+            ;;
+        pocket_tts)
+            if [[ -z "$voice" ]]; then
+                if [[ "$lang" == "spanish" ]]; then voice="rafael"; else voice="alba"; fi
+            fi
+            if fetch "PocketTTS-GGUF/$lang/embeddings/$voice.safetensors" \
+                     "$path/embeddings/$voice.safetensors"; then
+                log "voice ready: $voice"
+                preset=$(jq -nc --arg v "$voice" '{voice_id: $v}')
+            else
+                log "WARNING: voice '$voice' not available for $lang, using the model default"
+            fi
+            opts=$(jq -nc --argjson sp "$TTS_SPEED" 'if $sp == 1 then {} else {speed: $sp} end')
+            ;;
+        chatterbox|qwen3_tts)
             if [[ -n "$TTS_VOICE_REF" && -s "$TTS_VOICE_REF" ]]; then
                 log "voice reference: $TTS_VOICE_REF"
+                preset=$(jq -nc --arg r "$TTS_VOICE_REF" '{voice_ref: $r}')
             else
-                log "WARNING: $tts_family clones from tts_voice_ref (a wav inside /share); none found, using the family default"
-                TTS_VOICE_REF=""
+                log "WARNING: $family clones from tts_voice_ref (a wav inside /share); none found, using the family default"
             fi
-            TTS_VOICE=""
+            # qwen3_tts clones in ICL mode and refuses to synthesise without the
+            # transcript of the reference clip.
+            if [[ "$family" == "qwen3_tts" && -n "$TTS_VOICE_REF_TEXT" ]]; then
+                opts=$(jq -nc --arg lang "$TTS_LANGUAGE" --arg rt "$TTS_VOICE_REF_TEXT" \
+                    '{language: $lang, reference_text: $rt}')
+                log "voice reference text: ${#TTS_VOICE_REF_TEXT} characters"
+            else
+                if [[ "$family" == "qwen3_tts" && -n "$TTS_VOICE_REF" ]]; then
+                    log "WARNING: qwen3_tts needs tts_voice_ref_text, synthesis fails until it is set"
+                fi
+                opts=$(jq -nc --arg lang "$TTS_LANGUAGE" '{language: $lang}')
+            fi
+            if [[ "$family" == "chatterbox" ]]; then mode="offline"; fi
+            ;;
+    esac
+
+    jq -nc --arg sid "$sid" --arg family "$family" --arg path "$path" --arg mode "$mode" \
+        --argjson preset "$preset" --argjson opts "$opts" \
+        '{id: $sid, family: $family, path: $path, task: "tts", mode: $mode}
+         + (if ($preset|length) == 0 then {} else {default_voice_preset: $preset} end)
+         + (if ($opts|length) == 0 then {} else {default_request_options: $opts} end)'
+}
+
+models_json="$(
+    {
+        asr_entry
+        tts_entry "$TTS_MODEL" "tts"
+        if [[ -n "$TTS_HQ_MODEL" && "$TTS_HQ_MODEL" != "none" && "$TTS_HQ_MODEL" != "$TTS_MODEL" ]]; then
+            tts_entry "$TTS_HQ_MODEL" "tts-hq"
         fi
-    else
-        log "WARNING: could not download $TTS_MODEL, text-to-speech disabled"
-        tts_family=""; tts_path=""
-    fi
-fi
+    } | jq -s '.'
+)"
 
 # ---------------------------------------------------------------- gpu devices
 if [[ -d /dev/dri ]]; then
@@ -193,16 +224,7 @@ jq -n \
     --arg backend "$BACKEND" \
     --argjson threads "$THREADS" \
     --argjson max_loaded "$MAX_LOADED" \
-    --arg asr_family "$asr_family" \
-    --arg asr_path "$asr_path" \
-    --argjson asr_opts "$asr_opts" \
-    --arg tts_family "$tts_family" \
-    --arg tts_path "$tts_path" \
-    --arg tts_voice "$TTS_VOICE" \
-    --arg tts_voice_ref "$TTS_VOICE_REF" \
-    --arg tts_mode "$tts_mode" \
-    --arg tts_language "$TTS_LANGUAGE" \
-    --argjson tts_speed "$TTS_SPEED" \
+    --argjson models "$models_json" \
     '{
         host: "0.0.0.0",
         port: 8099,
@@ -210,29 +232,10 @@ jq -n \
         threads: $threads,
         lazy_load: true,
         max_loaded_models: $max_loaded,
-        models: [
-            (if $asr_path == "" then empty else (
-                {id: "asr", family: $asr_family, path: $asr_path, task: "asr", mode: "offline"}
-                + (if $asr_opts == {} then {} else {default_request_options: $asr_opts} end)
-            ) end),
-            (if $tts_path == "" then empty else (
-                {id: "tts", family: $tts_family, path: $tts_path, task: "tts", mode: $tts_mode}
-                + (if $tts_voice_ref != "" then {default_voice_preset: {voice_ref: $tts_voice_ref}}
-                   elif $tts_voice == "" then {}
-                   else {default_voice_preset: {voice_id: $tts_voice}} end)
-                + (if ($tts_family == "chatterbox" or $tts_family == "qwen3_tts")
-                   then {default_request_options: {language: $tts_language}}
-                   elif $tts_family == "kokoro_tts"
-                   then {default_request_options: (
-                       {language: $tts_language} + (if $tts_speed == 1 then {} else {speed: $tts_speed} end)
-                   )}
-                   else (if $tts_speed == 1 then {} else {default_request_options: {speed: $tts_speed}} end)
-                   end)
-            ) end)
-        ]
+        models: $models
     }' > "$SERVER_CONFIG"
 
-log "server config: $(jq -c '{backend, threads, models: [.models[] | {id, family, mode}]}' "$SERVER_CONFIG")"
+log "server config: $(jq -c '{backend, threads, max_loaded_models, models: [.models[] | {id, family, mode}]}' "$SERVER_CONFIG")"
 log "starting audiocpp_server on 0.0.0.0:$PORT (backend=$BACKEND, threads=$THREADS)"
 
 exec ./audiocpp_server --config "$SERVER_CONFIG" --ui --ui-management
