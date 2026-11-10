@@ -34,6 +34,7 @@ ASR_LANGUAGE="$(opt asr_language)";    ASR_LANGUAGE="${ASR_LANGUAGE:-es}"
 ASR_PUNC="$(opt asr_punc)";            ASR_PUNC="${ASR_PUNC:-false}"
 TTS_MODEL="$(opt tts_model)";          TTS_MODEL="${TTS_MODEL:-pocket_tts_spanish_q8_0}"
 TTS_VOICE="$(opt tts_voice)";          TTS_VOICE="${TTS_VOICE:-}"
+TTS_VOICE_REF="$(opt tts_voice_ref)";  TTS_VOICE_REF="${TTS_VOICE_REF:-}"
 TTS_SPEED="$(opt tts_speed)";          TTS_SPEED="${TTS_SPEED:-1.0}"
 MAX_LOADED="$(opt max_loaded_models)"; MAX_LOADED="${MAX_LOADED:-2}"
 HF_TOKEN="$(opt hf_token)"
@@ -57,8 +58,15 @@ case "$TTS_MODEL" in
     pocket_tts_spanish_q8_0) tts_spec="pocket_tts|PocketTTS-GGUF/spanish/pocket-tts-spanish-q8_0.gguf"; tts_lang="spanish" ;;
     pocket_tts_english_q8_0) tts_spec="pocket_tts|PocketTTS-GGUF/english/pocket-tts-english-q8_0.gguf"; tts_lang="english" ;;
     kokoro_82m_q8_0)          tts_spec="kokoro_tts|Kokoro-82M-GGUF/kokoro-82m-q8_0.gguf"; tts_lang="" ;;
+    chatterbox_q8_0)          tts_spec="chatterbox|Chatterbox-GGUF/chatterbox-q8_0.gguf"; tts_lang="" ;;
     none)                    tts_spec="" ;;
     *) log "WARNING: unknown tts_model '$TTS_MODEL', text-to-speech disabled"; tts_spec="" ;;
+esac
+
+# Streaming is only advertised by some families; chatterbox is offline-only.
+tts_mode="streaming"
+case "${tts_spec%%|*}" in
+    chatterbox) tts_mode="offline" ;;
 esac
 
 # Families ship their own default voice; keep an explicit one if the user set it.
@@ -113,8 +121,10 @@ tts_family=""; tts_path=""
 if [[ -n "$tts_spec" ]]; then
     tts_family="${tts_spec%%|*}"
     tts_path="$MODELS_DIR/$(dirname "${tts_spec#*|}")"
-    # kokoro loads the single GGUF file; pocket_tts loads the package directory
-    [[ "$tts_family" == "kokoro_tts" ]] && tts_path="$MODELS_DIR/${tts_spec#*|}"
+    # kokoro and chatterbox load a single GGUF file; pocket_tts loads the package directory
+    case "$tts_family" in
+        kokoro_tts|chatterbox) tts_path="$MODELS_DIR/${tts_spec#*|}" ;;
+    esac
     if fetch "${tts_spec#*|}" "$MODELS_DIR/${tts_spec#*|}"; then
         log "text-to-speech ready: $TTS_MODEL ($tts_family)"
         # A voice left over from another family must not be passed through.
@@ -132,6 +142,16 @@ if [[ -n "$tts_spec" ]]; then
                 log "WARNING: voice '$TTS_VOICE' not available for $tts_lang, using the model default"
                 TTS_VOICE=""
             fi
+        fi
+        # chatterbox has no preset voices: it clones from a reference clip.
+        if [[ "$tts_family" == "chatterbox" ]]; then
+            if [[ -n "$TTS_VOICE_REF" && -s "$TTS_VOICE_REF" ]]; then
+                log "voice reference: $TTS_VOICE_REF"
+            else
+                log "WARNING: chatterbox clones from tts_voice_ref (a wav inside /share); none found, using the family default"
+                TTS_VOICE_REF=""
+            fi
+            TTS_VOICE=""
         fi
     else
         log "WARNING: could not download $TTS_MODEL, text-to-speech disabled"
@@ -177,6 +197,8 @@ jq -n \
     --arg tts_family "$tts_family" \
     --arg tts_path "$tts_path" \
     --arg tts_voice "$TTS_VOICE" \
+    --arg tts_voice_ref "$TTS_VOICE_REF" \
+    --arg tts_mode "$tts_mode" \
     --argjson tts_speed "$TTS_SPEED" \
     '{
         host: "0.0.0.0",
@@ -191,8 +213,10 @@ jq -n \
                 + (if $asr_opts == {} then {} else {default_request_options: $asr_opts} end)
             ) end),
             (if $tts_path == "" then empty else (
-                {id: "tts", family: $tts_family, path: $tts_path, task: "tts", mode: "streaming"}
-                + (if $tts_voice == "" then {} else {default_voice_preset: {voice_id: $tts_voice}} end)
+                {id: "tts", family: $tts_family, path: $tts_path, task: "tts", mode: $tts_mode}
+                + (if $tts_voice_ref != "" then {default_voice_preset: {voice_ref: $tts_voice_ref}}
+                   elif $tts_voice == "" then {}
+                   else {default_voice_preset: {voice_id: $tts_voice}} end)
                 + (if $tts_family == "kokoro_tts"
                    then {default_request_options: (
                        {language: "es"} + (if $tts_speed == 1 then {} else {speed: $tts_speed} end)

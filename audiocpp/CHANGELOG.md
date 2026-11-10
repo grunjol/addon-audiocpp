@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.4.7
+
+- New TTS family: **Chatterbox** (`chatterbox_q8_0`, 0.5B, 19 languages, zero-shot cloning,
+  2.1 GB). Offline-only, so the model is registered with `mode: offline` instead of `streaming`.
+- New option `tts_voice_ref`: absolute path **inside the container** (use `/share/...`) to a wav that
+  the family clones from. Families without preset voices (chatterbox) need it; when empty they fall
+  back to their built-in default voice.
+- Note: `chatterbox_turbo` (699 MB) is smaller but its spec only declares `tasks: ["tts"]`, so it
+  cannot clone — the full `chatterbox` package is the one with `tts`/`clone`/`vc`.
+
 ## 0.9.4.6
 
 - Speech-to-text reliability: canary returns an **empty transcript** for some perfectly valid audio
