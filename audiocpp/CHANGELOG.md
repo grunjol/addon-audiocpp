@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.4.11
+
+- Two 100M-class TTS packages added, to test fidelity without jumping to 2 GB models:
+  `pocket_tts_spanish_bf16` (219 MB, same PocketTTS architecture, unquantised) and
+  `moss_tts_nano_q8_0` (193 MB, MOSS-TTS Nano, tts+clone, 19 languages).
+- `moss_tts_nano` clones in ICL mode like `qwen3_tts`, so it also reads `tts_voice_ref` +
+  `tts_voice_ref_text`. It exposes no `language` option: it infers it.
+- Note: PocketTTS only ships 100M (plus 18M/7M/2M *smaller* variants); there is no larger PocketTTS.
+
 ## 0.9.4.10
 
 - New option `tts_hq_model` (default `none`): registers a **second TTS model** as `tts-hq` in the

@@ -54,6 +54,8 @@ model_spec() {
         nemotron_asr_q8_0)       echo "nemotron_asr|Nemotron-3.5-ASR-Streaming-0.6B-GGUF/nemotron-3.5-asr-streaming-0.6b-q8_0.gguf|" ;;
         pocket_tts_spanish_q8_0) echo "pocket_tts|PocketTTS-GGUF/spanish/pocket-tts-spanish-q8_0.gguf|spanish" ;;
         pocket_tts_english_q8_0) echo "pocket_tts|PocketTTS-GGUF/english/pocket-tts-english-q8_0.gguf|english" ;;
+        pocket_tts_spanish_bf16) echo "pocket_tts|PocketTTS-GGUF/spanish/pocket-tts-spanish-bf16.gguf|spanish" ;;
+        moss_tts_nano_q8_0)    echo "moss_tts_nano|MOSS-TTS-Nano-100M-GGUF/moss-tts-nano-100m-q8_0.gguf|" ;;
         kokoro_82m_q8_0)         echo "kokoro_tts|Kokoro-82M-GGUF/kokoro-82m-q8_0.gguf|" ;;
         chatterbox_q8_0)         echo "chatterbox|Chatterbox-GGUF/chatterbox-q8_0.gguf|" ;;
         qwen3_tts_0_6b_q8_0)     echo "qwen3_tts|Qwen3-TTS-12Hz-0.6B-Base-GGUF/qwen3-tts-12hz-0.6b-base-q8_0.gguf|" ;;
@@ -120,7 +122,7 @@ tts_entry() {
     path="$MODELS_DIR/$(dirname "$rel")"
     # These families load the single GGUF file; pocket_tts loads the package dir.
     case "$family" in
-        kokoro_tts|chatterbox|qwen3_tts) path="$MODELS_DIR/$rel" ;;
+        kokoro_tts|chatterbox|qwen3_tts|moss_tts_nano) path="$MODELS_DIR/$rel" ;;
     esac
     if ! fetch "$rel" "$MODELS_DIR/$rel"; then
         log "WARNING: could not download $model ($sid), skipped"
@@ -152,7 +154,7 @@ tts_entry() {
             fi
             opts=$(jq -nc --argjson sp "$TTS_SPEED" 'if $sp == 1 then {} else {speed: $sp} end')
             ;;
-        chatterbox|qwen3_tts)
+        chatterbox|qwen3_tts|moss_tts_nano)
             if [[ -n "$TTS_VOICE_REF" && -s "$TTS_VOICE_REF" ]]; then
                 log "voice reference: $TTS_VOICE_REF"
                 preset=$(jq -nc --arg r "$TTS_VOICE_REF" '{voice_ref: $r}')
@@ -161,15 +163,27 @@ tts_entry() {
             fi
             # qwen3_tts clones in ICL mode and refuses to synthesise without the
             # transcript of the reference clip.
-            if [[ "$family" == "qwen3_tts" && -n "$TTS_VOICE_REF_TEXT" ]]; then
-                opts=$(jq -nc --arg lang "$TTS_LANGUAGE" --arg rt "$TTS_VOICE_REF_TEXT" \
-                    '{language: $lang, reference_text: $rt}')
+            # qwen3_tts and moss_tts_nano clone in ICL mode: they need the
+            # transcript of the reference clip, not just the audio.
+            local wants_text=""
+            [[ "$family" == "qwen3_tts" || "$family" == "moss_tts_nano" ]] && wants_text="1"
+            if [[ -n "$wants_text" && -n "$TTS_VOICE_REF_TEXT" ]]; then
+                if [[ "$family" == "qwen3_tts" ]]; then
+                    opts=$(jq -nc --arg lang "$TTS_LANGUAGE" --arg rt "$TTS_VOICE_REF_TEXT" \
+                        '{language: $lang, reference_text: $rt}')
+                else
+                    opts=$(jq -nc --arg rt "$TTS_VOICE_REF_TEXT" '{reference_text: $rt}')
+                fi
                 log "voice reference text: ${#TTS_VOICE_REF_TEXT} characters"
             else
-                if [[ "$family" == "qwen3_tts" && -n "$TTS_VOICE_REF" ]]; then
-                    log "WARNING: qwen3_tts needs tts_voice_ref_text, synthesis fails until it is set"
+                if [[ -n "$wants_text" && -n "$TTS_VOICE_REF" ]]; then
+                    log "WARNING: $family needs tts_voice_ref_text, synthesis fails until it is set"
                 fi
-                opts=$(jq -nc --arg lang "$TTS_LANGUAGE" '{language: $lang}')
+                if [[ "$family" == "qwen3_tts" ]]; then
+                    opts=$(jq -nc --arg lang "$TTS_LANGUAGE" '{language: $lang}')
+                else
+                    opts="{}"
+                fi
             fi
             if [[ "$family" == "chatterbox" ]]; then mode="offline"; fi
             ;;
