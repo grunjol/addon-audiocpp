@@ -120,11 +120,18 @@ tts_entry() {
     [[ -z "$family" || "$family" == "none" ]] && return 0
 
     path="$MODELS_DIR/$(dirname "$rel")"
-    # These families load the single GGUF file; pocket_tts loads the package dir.
+    local mfile="$MODELS_DIR/$rel"
+    # These families load the single GGUF file; pocket_tts loads a package dir.
+    # PocketTTS refuses a directory holding more than one GGUF, so each package
+    # (q8_0, bf16...) gets its own subdirectory with the file and its embeddings.
     case "$family" in
         kokoro_tts|chatterbox|qwen3_tts|moss_tts_nano) path="$MODELS_DIR/$rel" ;;
+        pocket_tts)
+            path="$MODELS_DIR/$(dirname "$rel")/$(basename "$rel" .gguf)"
+            mfile="$path/$(basename "$rel")"
+            ;;
     esac
-    if ! fetch "$rel" "$MODELS_DIR/$rel"; then
+    if ! fetch "$rel" "$mfile"; then
         log "WARNING: could not download $model ($sid), skipped"
         return 0
     fi

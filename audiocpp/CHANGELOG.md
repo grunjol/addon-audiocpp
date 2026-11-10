@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.4.12
+
+- Fix: `pocket_tts` refuses to load a directory holding more than one GGUF
+  (`model directory contains 2 GGUF files`), so adding the bf16 package broke the q8 one. Each
+  PocketTTS package now lives in its own subdirectory (`PocketTTS-GGUF/<lang>/<package>/`) with its
+  GGUF and its voice embeddings inside. Existing downloads must be moved once (see below).
+
 ## 0.9.4.11
 
 - Two 100M-class TTS packages added, to test fidelity without jumping to 2 GB models:
