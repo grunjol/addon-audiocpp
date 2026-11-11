@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.4.15
+
+- `models_root` in the generated server config now points at `/share`, so model packages downloaded
+  from the WebUI land in `/share/audiocpp/models` instead of the container's `/app/models` and survive
+  add-on updates.
+- New `asr_live_model` / `asr_live_language` options: a second speech-to-text model served as
+  `asr-live` in `mode: streaming`, for live transcription over `POST /v1/audio/transcriptions/live`
+  (raw PCM in, SSE deltas out) and for the WebUI's live input. Models downloaded from the WebUI land
+  in the container's `/app/models` and are lost on restart, so this keeps the streaming model in
+  `/share` under the addon's configuration.
+
 ## 0.9.4.14
 
 - New option `tts_voice_presets`: one `name=/absolute/path.wav` per line. Each entry becomes a named

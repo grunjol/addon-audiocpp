@@ -32,6 +32,8 @@ THREADS="$(opt threads)";              THREADS="${THREADS:-3}"
 ASR_MODEL="$(opt asr_model)";          ASR_MODEL="${ASR_MODEL:-canary_180m_flash_q8_0}"
 ASR_LANGUAGE="$(opt asr_language)";    ASR_LANGUAGE="${ASR_LANGUAGE:-es}"
 ASR_PUNC="$(opt asr_punc)";            ASR_PUNC="${ASR_PUNC:-false}"
+ASR_LIVE_MODEL="$(opt asr_live_model)"; ASR_LIVE_MODEL="${ASR_LIVE_MODEL:-none}"
+ASR_LIVE_LANGUAGE="$(opt asr_live_language)"; ASR_LIVE_LANGUAGE="${ASR_LIVE_LANGUAGE:-es-ES}"
 TTS_MODEL="$(opt tts_model)";          TTS_MODEL="${TTS_MODEL:-pocket_tts_spanish_q8_0}"
 TTS_HQ_MODEL="$(opt tts_hq_model)";    TTS_HQ_MODEL="${TTS_HQ_MODEL:-none}"
 TTS_VOICE="$(opt tts_voice)";          TTS_VOICE="${TTS_VOICE:-}"
@@ -104,31 +106,33 @@ if [[ -n "$TTS_VOICE_PRESETS" ]]; then
 fi
 
 # Emits one JSON model entry per call; log lines go to stderr.
+# asr_entry <package id> <server model id> <offline|streaming> [language]
 asr_entry() {
+    local model="$1" sid="${2:-asr}" mode="${3:-offline}" lang="${4:-$ASR_LANGUAGE}"
     local spec family rel path opts
-    if ! spec="$(model_spec "$ASR_MODEL")"; then
-        log "WARNING: unknown asr_model '$ASR_MODEL', speech-to-text disabled"
+    if ! spec="$(model_spec "$model")"; then
+        log "WARNING: unknown asr model '$model' ($sid), skipped"
         return 0
     fi
     IFS='|' read -r family rel _ <<<"$spec"
     [[ -z "$family" || "$family" == "none" ]] && return 0
     path="$MODELS_DIR/$rel"
     if ! fetch "$rel" "$path"; then
-        log "WARNING: could not download $ASR_MODEL, speech-to-text disabled"
+        log "WARNING: could not download $model ($sid), speech-to-text skipped"
         return 0
     fi
-    log "speech-to-text ready: $ASR_MODEL ($family)"
+    log "speech-to-text ready: $model ($family, id=$sid, mode=$mode)"
     # Canary with punctuation enabled drops some utterances entirely (empty
     # transcript); punc=false is reliable, and language pins the output language.
     if [[ "$family" == "canary_asr" ]]; then
-        opts=$(jq -nc --arg lang "$ASR_LANGUAGE" --arg punc "$ASR_PUNC" \
+        opts=$(jq -nc --arg lang "$lang" --arg punc "$ASR_PUNC" \
             '{language: $lang, punc: ($punc == "true")}')
     else
-        opts=$(jq -nc --arg lang "$ASR_LANGUAGE" '{language: $lang}')
+        opts=$(jq -nc --arg lang "$lang" '{language: $lang}')
     fi
-    log "speech-to-text options: $opts"
-    jq -nc --arg family "$family" --arg path "$path" --argjson opts "$opts" \
-        '{id: "asr", family: $family, path: $path, task: "asr", mode: "offline"}
+    log "speech-to-text options ($sid): $opts"
+    jq -nc --arg sid "$sid" --arg mode "$mode" --arg family "$family" --arg path "$path" --argjson opts "$opts" \
+        '{id: $sid, family: $family, path: $path, task: "asr", mode: $mode}
          + (if ($opts|length) == 0 then {} else {default_request_options: $opts} end)'
 }
 
@@ -237,7 +241,10 @@ tts_entry() {
 
 models_json="$(
     {
-        asr_entry
+        asr_entry "$ASR_MODEL" asr offline
+        if [[ "$ASR_LIVE_MODEL" != "none" && -n "$ASR_LIVE_MODEL" ]]; then
+            asr_entry "$ASR_LIVE_MODEL" asr-live streaming "$ASR_LIVE_LANGUAGE"
+        fi
         tts_entry "$TTS_MODEL" "tts"
         if [[ -n "$TTS_HQ_MODEL" && "$TTS_HQ_MODEL" != "none" && "$TTS_HQ_MODEL" != "$TTS_MODEL" ]]; then
             tts_entry "$TTS_HQ_MODEL" "tts-hq"
@@ -277,6 +284,7 @@ jq -n \
     --arg backend "$BACKEND" \
     --argjson threads "$THREADS" \
     --argjson max_loaded "$MAX_LOADED" \
+    --arg models_root "$MODELS_DIR" \
     --argjson models "$models_json" \
     '{
         host: "0.0.0.0",
@@ -285,10 +293,11 @@ jq -n \
         threads: $threads,
         lazy_load: true,
         max_loaded_models: $max_loaded,
+        models_root: $models_root,
         models: $models
     }' > "$SERVER_CONFIG"
 
-log "server config: $(jq -c '{backend, threads, max_loaded_models, models: [.models[] | {id, family, mode}]}' "$SERVER_CONFIG")"
+log "server config: $(jq -c '{backend, threads, max_loaded_models, models_root, models: [.models[] | {id, family, mode}]}' "$SERVER_CONFIG")"
 log "starting audiocpp_server on 0.0.0.0:$PORT (backend=$BACKEND, threads=$THREADS)"
 
 exec ./audiocpp_server --config "$SERVER_CONFIG" --ui --ui-management
