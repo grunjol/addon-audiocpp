@@ -1,6 +1,10 @@
 # Changelog
 
-## 0.9.4.15
+## 0.9.4.16
+
+- `nemotron_asr` packages now pull their companion files (`tokenizer.json`, `tokenizer_config.json`,
+  `processor_config.json`, `config.json`) from the upstream NVIDIA repo into the package folder.
+  Without them the server refuses to load the model and the live endpoint fails at first request.
 
 - `models_root` in the generated server config now points at `/share`, so model packages downloaded
   from the WebUI land in `/share/audiocpp/models` instead of the container's `/app/models` and survive

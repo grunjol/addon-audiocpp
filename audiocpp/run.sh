@@ -67,19 +67,27 @@ model_spec() {
     esac
 }
 
-fetch() { # <path in HF repo> <local destination>
-    local rel="$1" dest="$2"
+# Companion files some packages need next to the GGUF (tokenizer, processor config).
+# audio.cpp's own GGUF repo ships weights only, so these come from the upstream model repo.
+fetch_from() { # <hf repo> <path inside the repo> <local destination>
+    local repo="$1" rel="$2" dest="$3"
     [[ -s "$dest" ]] && return 0
     mkdir -p "$(dirname "$dest")"
     log "downloading $rel"
     if [[ -n "$HF_TOKEN" ]]; then
-        curl -fSL --retry 3 --connect-timeout 20 -H "Authorization: Bearer ***" \
-            -o "$dest.part" "$HF_BASE/$HF_REPO/resolve/main/$rel"
+        curl -fSL --retry 3 --connect-timeout 20 -H "Authorization: Bearer $HF_TOKEN" \
+            -o "$dest.part" "$HF_BASE/$repo/resolve/main/$rel"
     else
         curl -fSL --retry 3 --connect-timeout 20 \
-            -o "$dest.part" "$HF_BASE/$HF_REPO/resolve/main/$rel"
+            -o "$dest.part" "$HF_BASE/$repo/resolve/main/$rel"
     fi
     mv "$dest.part" "$dest"
+}
+
+fetch() { # <path in the audio.cpp GGUF repo> <local destination>
+    local rel="$1" dest="$2"
+    [[ -s "$dest" ]] && return 0
+    fetch_from "$HF_REPO" "$rel" "$dest"
 }
 
 # Named voice presets -> {name: {voice_ref: path}}. The HA integration lists these
@@ -120,6 +128,15 @@ asr_entry() {
     if ! fetch "$rel" "$path"; then
         log "WARNING: could not download $model ($sid), speech-to-text skipped"
         return 0
+    fi
+    if [[ "$family" == "nemotron_asr" ]]; then
+        local dir cfg_repo="nvidia/nemotron-3.5-asr-streaming-0.6b"
+        dir="$(dirname "$path")"
+        for f in tokenizer.json tokenizer_config.json processor_config.json config.json; do
+            fetch_from "$cfg_repo" "$f" "$dir/$f" || {
+                log "WARNING: could not fetch $f for $model ($sid)"
+            }
+        done
     fi
     log "speech-to-text ready: $model ($family, id=$sid, mode=$mode)"
     # Canary with punctuation enabled drops some utterances entirely (empty

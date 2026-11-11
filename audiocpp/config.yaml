@@ -1,5 +1,5 @@
 name: "audio.cpp"
-version: "0.9.4.15"
+version: "0.9.4.16"
 slug: "audiocpp"
 description: "Local audio inference server: text-to-speech, speech-to-text, VAD and more (CPU or Vulkan)"
 url: "https://github.com/0xShug0/audio.cpp"
