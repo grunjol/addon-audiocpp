@@ -1,5 +1,5 @@
 name: "audio.cpp"
-version: "0.9.4.16"
+version: "0.9.4.17"
 slug: "audiocpp"
 description: "Local audio inference server: text-to-speech, speech-to-text, VAD and more (CPU or Vulkan)"
 url: "https://github.com/0xShug0/audio.cpp"
@@ -21,7 +21,7 @@ devices:
   - /dev/dri/card0
   - /dev/dri/renderD128
 ports:
-  8099/tcp: null
+  8099/tcp: 8099
 ports_description:
   8099/tcp: "audio.cpp HTTP API (OpenAI-compatible) and WebUI"
 map:

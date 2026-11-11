@@ -1,6 +1,9 @@
 # Changelog
 
-## 0.9.4.16
+## 0.9.4.17
+
+- The HTTP API is published on host port `8099`, so LAN clients (the dictation tool, scripts)
+  can reach `/v1/audio/speech` and `/v1/audio/transcriptions/live` without going through ingress.
 
 - `nemotron_asr` packages now pull their companion files (`tokenizer.json`, `tokenizer_config.json`,
   `processor_config.json`, `config.json`) from the upstream NVIDIA repo into the package folder.
